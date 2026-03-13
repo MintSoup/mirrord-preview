@@ -55,19 +55,13 @@ runs:
 
     - name: Restore mirrord CLI from cache
       id: cache-mirrord
-      # continue-on-error so act (and other non-GitHub environments) don't
-      # cascade-fail the entire composite action when the cache service is
-      # unavailable.
-      continue-on-error: true
       uses: actions/cache@v4
       with:
         path: /usr/local/bin/mirrord
         key: mirrord-${{ runner.os }}-${{ runner.arch }}-${{ steps.mirrord-version.outputs.version }}
 
     - name: Install mirrord CLI
-      # Install if the binary is missing — works whether cache hit, cache
-      # miss, or cache step failed entirely (e.g. running under act).
-      if: always()
+      if: steps.cache-mirrord.outputs.cache-hit != 'true'
       shell: bash
       run: |
         if command -v mirrord &>/dev/null; then
@@ -79,7 +73,6 @@ runs:
         fi
 
     - name: Verify mirrord CLI
-      if: always()
       shell: bash
       run: mirrord --version
 
@@ -88,7 +81,6 @@ runs:
     # ------------------------------------------------------------------ #
     - name: Run mirrord preview
       id: run-preview
-      if: always()
       shell: bash
       env:
         INPUT_ACTION: ${{ inputs.action }}
