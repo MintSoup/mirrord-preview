@@ -1,3 +1,6 @@
+# Designed to be used with act, uses kubeconfig from host.
+# Run with act -j test-start --container-options "-v /home/user/.kube:/root/.kube -v /home/user/.minikube:/root/.minikube"
+
 name: Test mirrord preview action
 on: push
 
@@ -26,7 +29,7 @@ jobs:
         uses: ./
         with:
           action: start
-          target: deployment/echoserver"
+          target: deployment/echoserver
           namespace: echoserver
           mode: steal
           filter: 'x-preview-id: test-123'
