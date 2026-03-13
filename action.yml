@@ -1,0 +1,85 @@
+name: 'mirrord Preview Environment'
+description: 'Start or stop a mirrord preview environment'
+branding:
+  icon: 'cloud'
+  color: 'purple'
+
+inputs:
+  action:
+    description: 'Action to perform: "start" or "stop"'
+    required: true
+  target:
+    description: 'Kubernetes target path (e.g. deployment/my-app). Required for start.'
+    required: false
+  mode:
+    description: 'Traffic mode: "steal" or "mirror". Default: steal'
+    required: false
+    default: 'steal'
+  filter:
+    description: 'Header filter regex applied to incoming HTTP traffic (and future SQS/Kafka filters). May reference {key}.'
+    required: false
+  ports:
+    description: 'JSON array of HTTP filter ports, e.g. [80, 8080]'
+    required: false
+  ttl_mins:
+    description: 'Session time-to-live in minutes. Integer or "infinite".'
+    required: false
+  key:
+    description: 'Unique preview session key. Optional for start (auto-generated if omitted), required for stop.'
+    required: false
+
+outputs:
+  session-key:
+    description: 'The preview session key (extracted from mirrord CLI output)'
+    value: ${{ steps.run-preview.outputs.session-key }}
+
+runs:
+  using: 'composite'
+  steps:
+    # ------------------------------------------------------------------ #
+    # 1. Install or restore mirrord CLI from cache
+    # ------------------------------------------------------------------ #
+    - name: Detect latest mirrord version
+      id: mirrord-version
+      shell: bash
+      run: |
+        MIRRORD_VERSION=$(curl -fsSL https://version.mirrord.dev/v1/version 2>/dev/null || echo "latest")
+        echo "version=${MIRRORD_VERSION}" >> "$GITHUB_OUTPUT"
+        echo "::debug::mirrord version resolved to ${MIRRORD_VERSION}"
+
+    - name: Restore mirrord CLI from cache
+      id: cache-mirrord
+      uses: actions/cache@v4
+      with:
+        path: /usr/local/bin/mirrord
+        key: mirrord-${{ runner.os }}-${{ runner.arch }}-${{ steps.mirrord-version.outputs.version }}
+
+    - name: Install mirrord CLI
+      if: steps.cache-mirrord.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/metalbear-co/mirrord/main/scripts/install.sh | bash
+        echo "mirrord installed: $(mirrord --version)"
+
+    - name: Verify mirrord CLI
+      shell: bash
+      run: mirrord --version
+
+    # ------------------------------------------------------------------ #
+    # 2. Run mirrord preview start / stop
+    # ------------------------------------------------------------------ #
+    - name: Run mirrord preview
+      id: run-preview
+      shell: bash
+      env:
+        INPUT_ACTION: ${{ inputs.action }}
+        INPUT_TARGET: ${{ inputs.target }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_FILTER: ${{ inputs.filter }}
+        INPUT_PORTS: ${{ inputs.ports }}
+        INPUT_TTL_MINS: ${{ inputs.ttl_mins }}
+        INPUT_KEY: ${{ inputs.key }}
+        MIRRORD_PROGRESS_MODE: json
+      run: |
+        set -euo pipefail
+        "${{ github.action_path }}/scripts/run.sh"
